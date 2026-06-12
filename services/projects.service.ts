@@ -126,34 +126,34 @@ export async function runAnalysisPipeline(
     });
 
     // Upsert all report sections
-    await supabase.from("venture_scores").upsert(
+    await (supabase.from("venture_scores") as any).upsert(
       { project_id: projectId, ...report.scores },
       { onConflict: "project_id" }
     );
 
-    await supabase.from("analyses").upsert(
+    await (supabase.from("analyses") as any).upsert(
       { project_id: projectId, ...report.analysis },
       { onConflict: "project_id" }
     );
 
-    await supabase.from("competitors").upsert(
+    await (supabase.from("competitors") as any).upsert(
       { project_id: projectId, ...report.competitors },
       { onConflict: "project_id" }
     );
 
-    await supabase.from("branding").upsert(
+    await (supabase.from("branding") as any).upsert(
       { project_id: projectId, ...report.branding },
       { onConflict: "project_id" }
     );
 
-    await supabase.from("roadmaps").upsert(
+    await (supabase.from("roadmaps") as any).upsert(
       { project_id: projectId, ...report.roadmap },
       { onConflict: "project_id" }
     );
 
     await supabase
       .from("projects")
-      .update({ status: "complete" } as any)
+      .update({ status: "complete" } as never)
       .eq("id", projectId);
 
     const updated = await getProjectById(projectId, userId);
@@ -162,7 +162,7 @@ export async function runAnalysisPipeline(
   } catch (err) {
     await supabase
       .from("projects")
-      .update({ status: "failed" } as any)
+      .update({ status: "failed" } as never)
       .eq("id", projectId);
     throw err;
   }
