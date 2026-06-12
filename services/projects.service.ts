@@ -43,7 +43,8 @@ export async function getProjectById(
     if (error.code === "PGRST116") return null;
     throw new Error(error.message);
   }
-
+  if (!data) return null;
+	
   return {
     ...data,
     venture_scores: Array.isArray(data.venture_scores)
