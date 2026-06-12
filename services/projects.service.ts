@@ -82,7 +82,7 @@ export async function createProject(
       industry: input.industry ?? null,
       target_market: input.target_market ?? null,
       status: "draft",
-    })
+    } as any)
     .select()
     .single();
 
