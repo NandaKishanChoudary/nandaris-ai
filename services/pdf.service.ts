@@ -216,10 +216,12 @@ function ReportDocument({ project }: { project: ProjectWithReport }) {
 export async function generateProjectPDF(
   project: ProjectWithReport
 ): Promise<Buffer> {
-  const doc = React.createElement(
-  ReportDocument as React.FC<{ project: ProjectWithReport }>,
-  { project });
+  const doc = React.createElement(ReportDocument, {
+    project,
+  }) as React.ReactElement;
+
   const blob = await pdf(doc).toBlob();
   const arrayBuffer = await blob.arrayBuffer();
+
   return Buffer.from(arrayBuffer);
 }
