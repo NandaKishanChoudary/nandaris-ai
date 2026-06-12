@@ -114,9 +114,9 @@ export async function runAnalysisPipeline(
   if (!project) throw new Error("Project not found");
 
   await supabase
-    .from("projects")
-    .update({ status: "analyzing" })
-    .eq("id", projectId);
+   .from("projects")
+   .update({ status: "analyzing" } as any)
+   .eq("id", projectId);
 
   try {
     const report = await generateVentureReport({
@@ -153,7 +153,7 @@ export async function runAnalysisPipeline(
 
     await supabase
       .from("projects")
-      .update({ status: "complete" })
+      .update({ status: "complete" } as any)
       .eq("id", projectId);
 
     const updated = await getProjectById(projectId, userId);
@@ -162,7 +162,7 @@ export async function runAnalysisPipeline(
   } catch (err) {
     await supabase
       .from("projects")
-      .update({ status: "failed" })
+      .update({ status: "failed" } as any)
       .eq("id", projectId);
     throw err;
   }
