@@ -24,7 +24,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const pdfBuffer = await generateProjectPDF(project);
     const filename = `${project.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-report.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
