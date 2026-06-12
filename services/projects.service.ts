@@ -39,30 +39,33 @@ export async function getProjectById(
     .eq("user_id", userId)
     .single();
 
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(error.message);
-  }
-  if (!data) return null;
-	
-  return {
-    ...(data as Record<string, any>),
-    venture_scores: Array.isArray(data.venture_scores)
-      ? data.venture_scores[0] ?? null
-      : data.venture_scores,
-    analyses: Array.isArray(data.analyses)
-      ? data.analyses[0] ?? null
-      : data.analyses,
-    competitors: Array.isArray(data.competitors)
-      ? data.competitors[0] ?? null
-      : data.competitors,
-    branding: Array.isArray(data.branding)
-      ? data.branding[0] ?? null
-      : data.branding,
-    roadmaps: Array.isArray(data.roadmaps)
-      ? data.roadmaps[0] ?? null
-      : data.roadmaps,
-  } as ProjectWithReport;
+if (error) {
+  if (error.code === "PGRST116") return null;
+  throw new Error(error.message);
+}
+
+if (!data) return null;
+
+const projectData = data as any;
+
+return {
+  ...projectData,
+  venture_scores: Array.isArray(projectData.venture_scores)
+    ? projectData.venture_scores[0] ?? null
+    : projectData.venture_scores,
+  analyses: Array.isArray(projectData.analyses)
+    ? projectData.analyses[0] ?? null
+    : projectData.analyses,
+  competitors: Array.isArray(projectData.competitors)
+    ? projectData.competitors[0] ?? null
+    : projectData.competitors,
+  branding: Array.isArray(projectData.branding)
+    ? projectData.branding[0] ?? null
+    : projectData.branding,
+  roadmaps: Array.isArray(projectData.roadmaps)
+    ? projectData.roadmaps[0] ?? null
+    : projectData.roadmaps,
+} as ProjectWithReport;
 }
 
 export async function createProject(
