@@ -115,7 +115,7 @@ export async function runAnalysisPipeline(
 
   await supabase
    .from("projects")
-   .update({ status: "analyzing" } as any)
+   .update({status: "analyzing",} as never)
    .eq("id", projectId);
 
   try {
