@@ -46,7 +46,7 @@ export async function getProjectById(
   if (!data) return null;
 	
   return {
-    ...data,
+    ...(data as Record<string, any>),
     venture_scores: Array.isArray(data.venture_scores)
       ? data.venture_scores[0] ?? null
       : data.venture_scores,
