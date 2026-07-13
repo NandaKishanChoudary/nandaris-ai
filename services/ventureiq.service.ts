@@ -1,183 +1,241 @@
-import type { VentureIQInput } from "@/types/ventureiq.types";
+import { GoogleGenAI } from "@google/genai";
+import type {
+  VentureIQInput,
+  VentureReport,
+} from "@/types/ventureiq.types";
 
-/**
- * Deterministic pseudo-random generator seeded from input text.
- * Ensures the same idea always produces the same mock scores.
- */
-function seededRandom(seed: string): () => number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash << 5) - hash + seed.charCodeAt(i);
-    hash |= 0;
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+  throw new Error("GEMINI_API_KEY is missing.");
+}
+
+const ai = new GoogleGenAI({
+  apiKey,
+});
+
+
+const SYSTEM_PROMPT = `
+You are VentureIQ.
+
+You are an elite startup consultant with expertise comparable to:
+- Y Combinator
+- Sequoia Capital
+- Andreessen Horowitz
+- McKinsey
+- Harvard Business School
+
+Your task is to analyze startup ideas.
+
+Return ONLY valid JSON.
+
+Never return markdown.
+
+Never return explanations.
+
+Never wrap the JSON inside \`\`\`.
+
+The JSON MUST exactly follow this schema:
+
+{
+  "scores":{
+    "overall_score":0,
+    "market_demand":0,
+    "competition":0,
+    "revenue_potential":0,
+    "scalability":0,
+    "feasibility":0
+  },
+
+  "analysis":{
+    "problem_statement":"",
+    "target_audience":"",
+    "value_proposition":"",
+    "opportunity_summary":""
+  },
+
+  "competitors":{
+    "direct_competitors":[],
+    "indirect_competitors":[],
+    "strengths":[],
+    "weaknesses":[],
+    "differentiation":[]
+  },
+
+  "branding":{
+    "name_suggestions":[],
+    "tagline":"",
+    "brand_personality":"",
+    "color_palette":[
+      {
+        "name":"",
+        "hex":""
+      }
+    ],
+    "logo_prompt":""
+  },
+
+  "roadmap":{
+    "mvp_features":[],
+    "first_30_days":[],
+    "first_90_days":[],
+    "launch_recommendations":[]
   }
-  return () => {
-    hash = (hash * 1103515245 + 12345) & 0x7fffffff;
-    return hash / 0x7fffffff;
-  };
+}
+`;
+
+function buildPrompt(input: VentureIQInput) {
+  return `
+Analyze this startup.
+
+Startup Idea:
+${input.startupIdea}
+
+Industry:
+${input.industry ?? "General"}
+
+Target Market:
+${input.targetMarket ?? "General"}
+
+Requirements:
+
+1. Produce realistic startup scores.
+
+2. Competitors must be REAL companies.
+
+3. Brand names must be original.
+
+4. Roadmap must be startup specific.
+
+5. Do NOT hallucinate JSON keys.
+
+6. Every list must contain at least 5 items where applicable.
+
+7. Use real companies as competitors.
+
+8. Brand names must be unique and not trademarked.
+
+9. Scores must be realistic and between 0 and 100.
+
+10. Make the analysis detailed.
+
+11. Do not repeat information across sections.
+
+12. Roadmap should be specific to this startup.
+
+13. Return only valid JSON.
+
+Return ONLY JSON.
+`;
+}
+function ensureArray(value: any): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  return [];
 }
 
-function scoreRange(rng: () => number, min: number, max: number): number {
-  return Math.round(min + rng() * (max - min));
+function ensureString(value: any): string {
+  if (typeof value === "string") return value;
+  return "";
 }
 
-const INDUSTRY_COMPETITORS: Record<string, string[]> = {
-  Technology: ["Notion", "Linear", "Figma", "Slack"],
-  Healthcare: ["Teladoc", "Oscar Health", "Ro", "Hims & Hers"],
-  Finance: ["Stripe", "Plaid", "Robinhood", "Brex"],
-  Education: ["Coursera", "Duolingo", "Khan Academy", "Udemy"],
-  "E-commerce": ["Shopify", "Amazon", "Etsy", "WooCommerce"],
-  SaaS: ["Salesforce", "HubSpot", "Intercom", "Zendesk"],
-  default: ["Incumbent A", "Startup B", "Enterprise C", "Platform D"],
-};
-
-const COLOR_PALETTES = [
-  [
-    { name: "Primary", hex: "#6366F1" },
-    { name: "Secondary", hex: "#8B5CF6" },
-    { name: "Accent", hex: "#EC4899" },
-    { name: "Neutral", hex: "#1E1B4B" },
-  ],
-  [
-    { name: "Primary", hex: "#0EA5E9" },
-    { name: "Secondary", hex: "#06B6D4" },
-    { name: "Accent", hex: "#14B8A6" },
-    { name: "Neutral", hex: "#0F172A" },
-  ],
-  [
-    { name: "Primary", hex: "#F97316" },
-    { name: "Secondary", hex: "#EF4444" },
-    { name: "Accent", hex: "#FBBF24" },
-    { name: "Neutral", hex: "#18181B" },
-  ],
-];
-
-const NAME_PREFIXES = ["Nova", "Venture", "Pulse", "Spark", "Nexus", "Apex"];
-const NAME_SUFFIXES = ["IQ", "Labs", "Flow", "Hub", "Forge", "AI"];
-
-function pick<T>(arr: T[], rng: () => number, count: number): T[] {
-  const copy = [...arr];
-  const result: T[] = [];
-  for (let i = 0; i < count && copy.length > 0; i++) {
-    const idx = Math.floor(rng() * copy.length);
-    result.push(copy.splice(idx, 1)[0]);
-  }
-  return result;
+function ensureNumber(value: any): number {
+  if (typeof value === "number") return value;
+  return 0;
 }
 
-export async function generateVentureReport(input: VentureIQInput) {
-  const seed = `${input.startupIdea}|${input.industry ?? ""}|${input.targetMarket ?? ""}`;
-  const rng = seededRandom(seed);
-  const industry = input.industry ?? "Technology";
-  const market = input.targetMarket ?? "general consumers";
-  const idea = input.startupIdea;
-
-  const marketDemand = scoreRange(rng, 55, 92);
-  const competition = scoreRange(rng, 35, 75);
-  const revenuePotential = scoreRange(rng, 50, 88);
-  const scalability = scoreRange(rng, 60, 95);
-  const feasibility = scoreRange(rng, 45, 85);
-  const overall = Math.round(
-    (marketDemand + (100 - competition) + revenuePotential + scalability + feasibility) / 5
-  );
-
-  const competitors =
-    INDUSTRY_COMPETITORS[industry] ?? INDUSTRY_COMPETITORS.default;
-  const palette = COLOR_PALETTES[Math.floor(rng() * COLOR_PALETTES.length)];
-
-  const names = Array.from({ length: 5 }, () => {
-    const prefix = NAME_PREFIXES[Math.floor(rng() * NAME_PREFIXES.length)];
-    const suffix = NAME_SUFFIXES[Math.floor(rng() * NAME_SUFFIXES.length)];
-    return `${prefix}${suffix}`;
-  });
-
-  // Simulate async AI latency
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
+function validateReport(report: any): VentureReport {
   return {
     scores: {
-      overall_score: overall,
-      market_demand: marketDemand,
-      competition,
-      revenue_potential: revenuePotential,
-      scalability,
-      feasibility,
+      overall_score: ensureNumber(report?.scores?.overall_score),
+      market_demand: ensureNumber(report?.scores?.market_demand),
+      competition: ensureNumber(report?.scores?.competition),
+      revenue_potential: ensureNumber(report?.scores?.revenue_potential),
+      scalability: ensureNumber(report?.scores?.scalability),
+      feasibility: ensureNumber(report?.scores?.feasibility),
     },
+
     analysis: {
-      problem_statement: `${market} faces significant friction when trying to access solutions related to "${idea.slice(0, 80)}". Existing options are fragmented, expensive, or fail to address the core pain point effectively. Users spend excessive time and resources navigating inadequate alternatives.`,
-      target_audience: `Primary audience: ${market} seeking innovative solutions in the ${industry} space. Secondary audience: early adopters and professionals who value efficiency, data-driven decisions, and modern user experiences. Ideal customer profile includes tech-savvy decision-makers aged 25–45 with purchasing authority.`,
-      value_proposition: `A streamlined platform that transforms "${idea.slice(0, 60)}" into actionable outcomes — reducing complexity, accelerating time-to-value, and delivering measurable ROI through an intuitive, AI-enhanced experience tailored for ${market}.`,
-      opportunity_summary: `The ${industry} market presents a compelling opportunity with growing demand and identifiable gaps in current offerings. With a VentureIQ score of ${overall}/100, this venture shows ${overall >= 70 ? "strong" : overall >= 50 ? "moderate" : "emerging"} potential. Key success factors include rapid MVP validation, focused go-to-market strategy, and clear differentiation from established players.`,
+      problem_statement: ensureString(report?.analysis?.problem_statement),
+      target_audience: ensureString(report?.analysis?.target_audience),
+      value_proposition: ensureString(report?.analysis?.value_proposition),
+      opportunity_summary: ensureString(report?.analysis?.opportunity_summary),
     },
+
     competitors: {
-      direct_competitors: pick(competitors, rng, 3),
-      indirect_competitors: pick(
-        ["Manual processes", "Spreadsheets", "Consulting services", "Legacy software"],
-        rng,
-        3
-      ),
-      strengths: [
-        "Established brand recognition in the market",
-        "Large existing customer base and network effects",
-        "Significant funding and resources for R&D",
-        "Mature product with extensive feature sets",
-      ],
-      weaknesses: [
-        "Slow innovation cycles and legacy architecture",
-        "Poor user experience compared to modern alternatives",
-        "High pricing with complex enterprise contracts",
-        "Limited personalization and AI capabilities",
-      ],
-      differentiation: [
-        `AI-first approach specifically designed for ${market}`,
-        "Faster onboarding with value delivered in under 10 minutes",
-        "Transparent, founder-friendly pricing model",
-        "Modern UX with mobile-first design philosophy",
-        "Deep integration with tools your audience already uses",
-      ],
+      direct_competitors: ensureArray(report?.competitors?.direct_competitors),
+      indirect_competitors: ensureArray(report?.competitors?.indirect_competitors),
+      strengths: ensureArray(report?.competitors?.strengths),
+      weaknesses: ensureArray(report?.competitors?.weaknesses),
+      differentiation: ensureArray(report?.competitors?.differentiation),
     },
+
     branding: {
-      name_suggestions: names,
-      tagline: `Transform ideas into ventures — powered by intelligence`,
-      brand_personality:
-        "Innovative, trustworthy, and forward-thinking. The brand communicates confidence and clarity while remaining approachable to first-time founders. Tone is professional yet energetic, emphasizing empowerment and actionable insights.",
-      color_palette: palette,
-      logo_prompt: `Minimalist logo for a ${industry} startup called "${names[0]}". Abstract geometric mark combining upward arrow and neural network nodes. Colors: ${palette.map((c) => c.hex).join(", ")}. Clean, modern, suitable for SaaS platform. Vector style, white background.`,
+      name_suggestions: ensureArray(report?.branding?.name_suggestions),
+      tagline: ensureString(report?.branding?.tagline),
+      brand_personality: ensureString(report?.branding?.brand_personality),
+
+      color_palette: Array.isArray(report?.branding?.color_palette)
+        ? report.branding.color_palette
+        : [],
+
+      logo_prompt: ensureString(report?.branding?.logo_prompt),
     },
+
     roadmap: {
-      mvp_features: [
-        "Core idea submission and VentureIQ scoring engine",
-        "Automated market analysis report generation",
-        "Competitor landscape overview",
-        "Basic branding suggestions",
-        "Exportable PDF report",
-        "User dashboard with project management",
-      ],
-      first_30_days: [
-        "Week 1: Validate problem with 10 target customer interviews",
-        "Week 1: Set up landing page and collect waitlist signups",
-        "Week 2: Build and ship MVP with core scoring features",
-        "Week 2: Launch on Product Hunt and relevant communities",
-        "Week 3: Gather user feedback and iterate on UX",
-        "Week 4: Implement analytics and conversion tracking",
-        "Week 4: Reach 50 active beta users",
-      ],
-      first_90_days: [
-        "Month 2: Add advanced competitor analysis and branding tools",
-        "Month 2: Introduce team collaboration features",
-        "Month 2: Establish content marketing and SEO strategy",
-        "Month 3: Launch paid tier with premium analysis features",
-        "Month 3: Partner with accelerators and startup communities",
-        "Month 3: Target 500 registered users and 50 paying customers",
-        "Month 3: Prepare seed fundraising materials using platform data",
-      ],
-      launch_recommendations: [
-        "Start with a focused niche within your target market before expanding",
-        "Leverage free tier to build word-of-mouth and collect testimonials",
-        "Create shareable report snippets for social media virality",
-        "Engage startup Twitter/X and Indie Hackers communities",
-        "Offer limited-time founding member pricing",
-        "Build in public to attract early adopters and feedback",
-      ],
+      mvp_features: ensureArray(report?.roadmap?.mvp_features),
+      first_30_days: ensureArray(report?.roadmap?.first_30_days),
+      first_90_days: ensureArray(report?.roadmap?.first_90_days),
+      launch_recommendations: ensureArray(
+        report?.roadmap?.launch_recommendations
+      ),
     },
   };
+}
+export async function generateVentureReport(
+  input: VentureIQInput
+): Promise<VentureReport> {
+  const prompt = buildPrompt(input);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `${SYSTEM_PROMPT}\n\n${prompt}`,
+        config: {
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        },
+      });
+
+      const text = response.text;
+
+      if (!text) {
+        throw new Error("Empty response from Gemini.");
+      }
+
+      // Remove accidental markdown fences if Gemini returns them
+      const cleaned = text
+  	.replace(/^```json\s*/i, "")
+  	.replace(/^```\s*/i, "")
+  	.replace(/```$/i, "")
+  	.trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      return validateReport(parsed);
+    } catch (err) {
+      console.error(`Gemini attempt ${attempt} failed`, err);
+
+      if (attempt === 3) {
+        throw new Error(
+          "Gemini failed to generate a valid VentureIQ report."
+        );
+      }
+
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw new Error("Unexpected Gemini error.");
 }
